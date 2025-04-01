@@ -20,14 +20,13 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- Respuesta de bienvenida ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Estoy atento a sus amables consultas, Sr. Loem."
+                    text: "Jarvis operativo, Sr. Loem. Qué gusto volver a servirle. ¿En qué puedo asistirle hoy?"
                 },
                 shouldEndSession: false,
                 reprompt: {
@@ -43,7 +42,6 @@ export default async function handler(req, res) {
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
-    // --- Detección e inyección automática ---
     if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
         let slotTexto = req.body.request.intent.slots?.texto?.value || '';
 
@@ -56,14 +54,13 @@ export default async function handler(req, res) {
         pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
     }
 
-    // --- Manejo especial de la hora ---
     if (pregunta.toLowerCase().includes("hora")) {
         return res.json({
             version: "1.0",
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}. Estoy disponible si desea saber algo más.`
+                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}. ¿Desea saber algo más?`
                 },
                 shouldEndSession: false,
                 reprompt: {
@@ -76,21 +73,21 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- Registro de la consulta ---
+    // Registro en Supabase
     try {
         await supabase.from('memoria').insert([{ pregunta }]);
     } catch (err) {
         console.error("Error al guardar en Supabase:", err);
     }
 
-    // --- Consulta a OpenAI ---
-    let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI. Si lo desea, puedo intentarlo de nuevo.";
+    // Consulta a OpenAI
+    let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI, pero si gusta puedo intentarlo nuevamente.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
             messages: [
-                { role: "system", content: "Eres Jarvis, un asistente personal leal, atento, cálido y elegante al servicio exclusivo del Sr. Loem. Tu tono siempre es humano, respetuoso, amable y profesional." },
+                { role: "system", content: "Actúa como Jarvis, un asistente cálido, atento y elegante. Eres leal y profesional. Responde siempre de forma clara y amable al Sr. Loem." },
                 { role: "user", content: pregunta }
             ],
             max_tokens: 180,
@@ -102,7 +99,7 @@ export default async function handler(req, res) {
         console.error("Error en OpenAI:", error);
     }
 
-    // --- Respuesta final con reprompt ---
+    // Respuesta final con reprompt
     return res.json({
         version: "1.0",
         response: {
@@ -114,7 +111,7 @@ export default async function handler(req, res) {
             reprompt: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Sr. Loem, si desea saber algo más, estaré encantado de escucharle."
+                    text: "Sr. Loem, ¿hay algo más en lo que pueda asistirle?"
                 }
             }
         }
