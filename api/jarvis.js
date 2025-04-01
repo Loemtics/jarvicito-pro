@@ -20,7 +20,10 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- Elegancia desde el primer saludo ---
+    // --- Debug Elegante ---
+    console.log("KEY DETECTADA:", process.env.OPENAI_API_KEY);
+
+    // --- Manejo del LaunchRequest ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
