@@ -20,10 +20,7 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- Debug Elegante ---
-    console.log("KEY DETECTADA:", process.env.OPENAI_API_KEY);
-
-    // --- Manejo del LaunchRequest ---
+    // --- Manejo de LaunchRequest ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
@@ -37,34 +34,49 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- Captura de intents ---
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
+    // --- Obtención de la pregunta ---
     if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
         pregunta = req.body.request.intent.slots?.texto?.value || 'Sin pregunta definida';
     } else {
         pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
     }
 
-    // --- Registro en memoria ---
+    // --- Resolver localmente preguntas simples ---
+    if (pregunta.toLowerCase().includes("hora")) {
+        return res.json({
+            version: "1.0",
+            response: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}`
+                },
+                shouldEndSession: false
+            }
+        });
+    }
+
+    // --- Registro en Supabase ---
     try {
         await supabase.from('memoria').insert([{ pregunta }]);
     } catch (err) {
         console.error("Error al guardar en Supabase:", err);
     }
 
-    // --- Comunicación con OpenAI ---
+    // --- Consulta a OpenAI optimizada ---
     let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
             messages: [
-                { role: "system", content: "Eres Jarvis, un asistente personal leal, elegante y profesional al servicio exclusivo del Sr. Loem." },
+                { role: "system", content: "Responde de forma breve, clara y elegante. Actúa como el asistente Jarvis del Sr. Loem." },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 200
+            max_tokens: 100,
+            temperature: 0.4
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
