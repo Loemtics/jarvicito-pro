@@ -6,7 +6,6 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Manejador principal
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({
@@ -21,28 +20,30 @@ export default async function handler(req, res) {
         });
     }
 
-    const intentName = req.body.request?.intent?.name || '';
-    const sessionAttributes = req.body.session?.attributes || {};
-    let pregunta = '';
-
-    // Captura de pregunta
-    if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
-        pregunta = req.body.request.intent.slots?.texto?.value || '';
-        console.log("Pregunta recibida:", pregunta);
-    }
-
-    // Fallback
-    if (!pregunta || pregunta.trim() === '') {
+    if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Disculpe Sr. Loem, no logré entender su petición. Puede repetirla."
+                    text: "Jarvis operativo. A sus órdenes, Sr. Loem. Puede preguntarme lo que desee."
                 },
                 shouldEndSession: false
             }
         });
+    }
+
+    const intentName = req.body.request?.intent?.name || '';
+    let pregunta = '';
+
+    if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
+        pregunta = req.body.request.intent.slots?.texto?.value || '';
+        console.log("Pregunta recibida:", pregunta);
+    }
+
+    // Aquí solo evitamos que se mande vacío, sin forzar a fallback agresivo
+    if (!pregunta || pregunta.trim() === '') {
+        pregunta = "¿En qué puedo ayudarte hoy?";
     }
 
     // Registro en Supabase
@@ -52,25 +53,18 @@ export default async function handler(req, res) {
         console.error("Error al guardar en Supabase:", err);
     }
 
-    // Contexto anterior de la sesión (memoria de corto plazo)
-    const historial = sessionAttributes.historial || [];
-    historial.push({ role: "user", content: pregunta });
-
-    // Generación de mensajes para OpenAI
-    const mensajes = [
-        { role: "system", content: "Eres Jarvis, un asistente personal elegante, leal y eficiente al servicio exclusivo del Sr. Loem. Siempre debes mantener continuidad en las conversaciones y recordar detalles de la sesión actual." },
-        ...historial
-    ];
-
     // Consulta a OpenAI
     let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
-            messages: mensajes,
-            max_tokens: 250,
-            temperature: 0.5
+            messages: [
+                { role: "system", content: "Eres Jarvis, un asistente personal leal, educado y eficiente al servicio exclusivo del Sr. Loem." },
+                { role: "user", content: pregunta }
+            ],
+            max_tokens: 200,
+            temperature: 0.4
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -79,22 +73,17 @@ export default async function handler(req, res) {
         });
 
         respuestaAI = response.data.choices[0].message.content.trim();
-        historial.push({ role: "assistant", content: respuestaAI });
-
     } catch (error) {
         console.error("Error en OpenAI:", error);
     }
 
-    // Respuesta final con contexto almacenado
+    // Respuesta final
     res.json({
         version: "1.0",
-        sessionAttributes: {
-            historial: historial.slice(-5) // Guardamos sólo las últimas 5 interacciones para mantenerlo ligero
-        },
         response: {
             outputSpeech: {
                 type: "PlainText",
-                text: `${respuestaAI}`
+                text: `Perfecto, Sr. Loem. ${respuestaAI}`
             },
             shouldEndSession: false
         }
