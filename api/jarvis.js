@@ -20,6 +20,7 @@ export default async function handler(req, res) {
         });
     }
 
+    // --- Manejo de LaunchRequest ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
@@ -33,16 +34,30 @@ export default async function handler(req, res) {
         });
     }
 
+    // --- Identificación de Intent y Slot ---
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
     if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
-        pregunta = req.body.request.intent.slots?.texto?.value || 'Sin pregunta definida';
-    } else {
-        pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
+        pregunta = req.body.request.intent.slots?.texto?.value || '';
+        console.log("Pregunta recibida:", pregunta);
     }
 
-    // --- Resolver preguntas simples ---
+    // --- Fallback si no se capturó correctamente ---
+    if (!pregunta || pregunta.trim() === '') {
+        return res.json({
+            version: "1.0",
+            response: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: "Disculpe Sr. Loem, no logré entender su petición. Por favor, formule de nuevo la consulta."
+                },
+                shouldEndSession: false
+            }
+        });
+    }
+
+    // --- Preguntas simples resueltas localmente ---
     if (pregunta.toLowerCase().includes("hora")) {
         return res.json({
             version: "1.0",
@@ -70,7 +85,7 @@ export default async function handler(req, res) {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
             messages: [
-                { role: "system", content: "Responde de forma breve, precisa y con elegancia. Eres Jarvis, asistente personal del Sr. Loem." },
+                { role: "system", content: "Eres Jarvis, un asistente leal, profesional y elegante al servicio exclusivo del Sr. Loem. Responde siempre breve, directo y con estilo." },
                 { role: "user", content: pregunta }
             ],
             max_tokens: 150,
@@ -87,13 +102,13 @@ export default async function handler(req, res) {
         console.error("Error en OpenAI:", error);
     }
 
-    // --- Respuesta elegante nivel Stark ---
+    // --- Respuesta final con Confirmación ---
     res.json({
         version: "1.0",
         response: {
             outputSpeech: {
                 type: "PlainText",
-                text: `Perfecto, Sr. Loem. Consultando sobre "${pregunta}". ${respuestaAI}`
+                text: `Perfecto, Sr. Loem. Consultando sobre: "${pregunta}". ${respuestaAI}`
             },
             shouldEndSession: false
         }
