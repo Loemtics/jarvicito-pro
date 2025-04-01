@@ -38,7 +38,10 @@ app.post('/jarvis', async (req, res) => {
             }
         });
 
-        memoria.memorias.push({ fecha: new Date().toISOString(), evento: pregunta });
+        const respuesta = response.data.choices[0].message.content.trim();
+
+        // Actualizar memoria con la nueva pregunta
+        memoria.memorias.push({ fecha: new Date().toISOString(), evento: pregunta, respuesta: respuesta });
         guardarMemoria(memoria);
 
         res.json({ respuesta });
