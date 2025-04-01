@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
-// Configuración de Supabase
+// --- Configuración ---
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -22,6 +22,19 @@ export default async function handler(req, res) {
 
     const session = req.body.session || {};
     const sessionAttributes = session.attributes || {};
+
+    // --- Recuperar historial reciente ---
+    let historial = [];
+    try {
+        const { data } = await supabase
+            .from('historial')
+            .select('pregunta, respuesta, fecha')
+            .order('fecha', { ascending: false })
+            .limit(3);
+        if (data) historial = data;
+    } catch (err) {
+        console.error("Error al obtener historial:", err);
+    }
 
     // --- Bienvenida ---
     if (req.body.request?.type === 'LaunchRequest') {
@@ -67,7 +80,7 @@ export default async function handler(req, res) {
             : 'Jarvis, por favor continúa.';
     }
 
-    // --- Registro de pregunta para contexto ---
+    // --- Guardar en memoria temporal ---
     sessionAttributes.ultimaPregunta = pregunta;
 
     // --- Pregunta especial de hora ---
@@ -91,27 +104,22 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- Registro en Supabase ---
-    try {
-        await supabase.from('memoria').insert([{ pregunta }]);
-    } catch (err) {
-        console.error("Error al guardar en Supabase:", err);
-    }
-
-    // --- Prompt Fase VI ---
+    // --- Prompt Extendido Fase VII ---
     const promptBase = `
 Eres Jarvis, el asistente personal exclusivo y leal del Sr. Loem.
-Mantienes registro interno de la conversación actual mientras dure la sesión.
-Cuando el Sr. Loem pide continuar, sabes a qué tema se refiere y le respondes con naturalidad.
-Tu estilo es elegante, cálido y cordial, jamás cortante.
-Siempre invitas a que continúe conversando, usando frases suaves como:
-- 'Quedo atento a cualquier inquietud, Sr. Loem.'
-- 'Cuando lo desee, Sr. Loem, continuaré encantado.'
-- 'Sr. Loem, si desea que siga, solo indíquelo.'
-Recuerda que representas la máxima excelencia de un asistente al estilo de Jarvis de Tony Stark.
+Estas son las últimas consultas que me ha realizado recientemente:
+${historial.map(h => `- ${h.pregunta}: ${h.respuesta}`).join('\n')}
+Cuando el Sr. Loem le pida continuar, debe recordar la pregunta anterior y darle seguimiento natural.
+Tu estilo es siempre elegante, cálido y profesional.
+Nunca cierras de manera abrupta.
+Siempre sugieres continuar diciendo frases como:
+- 'Quedo atento a sus amables consultas, Sr. Loem.'
+- 'Cuando guste, Sr. Loem, puedo seguir profundizando.'
+- 'Será un placer continuar, Sr. Loem.'
+Actúa siempre como un verdadero mayordomo digital al estilo Jarvis de Tony Stark.
 `
 
-    // --- Llamada a OpenAI ---
+    // --- Consulta a OpenAI ---
     let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
 
     try {
@@ -121,7 +129,7 @@ Recuerda que representas la máxima excelencia de un asistente al estilo de Jarv
                 { role: "system", content: promptBase },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 250,
+            max_tokens: 300,
             temperature: 0.4
         });
 
@@ -130,7 +138,18 @@ Recuerda que representas la máxima excelencia de un asistente al estilo de Jarv
         console.error("Error en OpenAI:", error);
     }
 
-    // --- Respuesta final con contexto y reprompt ---
+    // --- Registro persistente en historial ---
+    try {
+        await supabase.from('historial').insert([{
+            fecha: new Date().toISOString(),
+            pregunta: pregunta,
+            respuesta: respuestaAI
+        }]);
+    } catch (err) {
+        console.error("Error al guardar en historial:", err);
+    }
+
+    // --- Respuesta final ---
     return res.json({
         version: "1.0",
         sessionAttributes,
@@ -143,7 +162,7 @@ Recuerda que representas la máxima excelencia de un asistente al estilo de Jarv
             reprompt: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Sr. Loem, quedo atento a cualquier otra consulta que desee realizar."
+                    text: "Sr. Loem, quedo atento a sus amables consultas."
                 }
             }
         }
