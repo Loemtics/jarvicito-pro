@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
-// Configuración de Supabase
+// --- Configuración ---
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -20,7 +20,6 @@ export default async function handler(req, res) {
         });
     }
 
-    // --- Manejo de LaunchRequest ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
@@ -37,14 +36,13 @@ export default async function handler(req, res) {
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
-    // --- Obtención de la pregunta ---
     if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
         pregunta = req.body.request.intent.slots?.texto?.value || 'Sin pregunta definida';
     } else {
         pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
     }
 
-    // --- Resolver localmente preguntas simples ---
+    // --- Resolver preguntas simples ---
     if (pregunta.toLowerCase().includes("hora")) {
         return res.json({
             version: "1.0",
@@ -65,17 +63,17 @@ export default async function handler(req, res) {
         console.error("Error al guardar en Supabase:", err);
     }
 
-    // --- Consulta a OpenAI optimizada ---
+    // --- Consulta a OpenAI ---
     let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
             messages: [
-                { role: "system", content: "Responde de forma breve, clara y elegante. Actúa como el asistente Jarvis del Sr. Loem." },
+                { role: "system", content: "Responde de forma breve, precisa y con elegancia. Eres Jarvis, asistente personal del Sr. Loem." },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 100,
+            max_tokens: 150,
             temperature: 0.4
         }, {
             headers: {
@@ -89,13 +87,13 @@ export default async function handler(req, res) {
         console.error("Error en OpenAI:", error);
     }
 
-    // --- Respuesta final ---
+    // --- Respuesta elegante nivel Stark ---
     res.json({
         version: "1.0",
         response: {
             outputSpeech: {
                 type: "PlainText",
-                text: respuestaAI
+                text: `Perfecto, Sr. Loem. Consultando sobre "${pregunta}". ${respuestaAI}`
             },
             shouldEndSession: false
         }
