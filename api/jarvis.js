@@ -129,7 +129,7 @@ Actúa siempre como un verdadero mayordomo digital al estilo Jarvis de Tony Star
                 { role: "system", content: promptBase },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 300,
+            max_tokens: 1500,  // Ajustado el valor de max_tokens a 1500
             temperature: 0.4
         });
 
