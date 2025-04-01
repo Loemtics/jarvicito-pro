@@ -13,23 +13,29 @@ export default async function handler(req, res) {
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Disculpe Sr. Loem, sólo acepto peticiones POST."
+                    text: "Disculpe Sr. Loem, sólo acepto peticiones POST. Me mantengo disponible cuando guste."
                 },
-                shouldEndSession: true
+                shouldEndSession: false
             }
         });
     }
 
-    // --- Detectar tipo de solicitud ---
+    // --- Presentación ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Jarvis operativo, Sr. Loem. ¿En qué puedo asistirle?"
+                    text: "Estoy atento a sus amables consultas, Sr. Loem."
                 },
-                shouldEndSession: false
+                shouldEndSession: false,
+                reprompt: {
+                    outputSpeech: {
+                        type: "PlainText",
+                        text: "Cuando desee, Sr. Loem, puede indicarme su consulta."
+                    }
+                }
             }
         });
     }
@@ -37,31 +43,35 @@ export default async function handler(req, res) {
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
-    // --- Inyección automática del carrier phrase ---
+    // --- Captura de pregunta ---
     if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
         let slotTexto = req.body.request.intent.slots?.texto?.value || '';
 
-        // Si viene vacío o solo whitespace, lo reemplazamos por "Jarvis"
         if (!slotTexto.trim()) {
             slotTexto = 'Jarvis';
         }
 
-        // Pregunta final
         pregunta = `Jarvis ${slotTexto}`;
     } else {
         pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
     }
 
-    // --- Manejo especial: responder la hora sin OpenAI ---
+    // --- Manejo especial de la hora ---
     if (pregunta.toLowerCase().includes("hora")) {
         return res.json({
             version: "1.0",
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}`
+                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}. Estoy disponible para lo que necesite.`
                 },
-                shouldEndSession: false
+                shouldEndSession: false,
+                reprompt: {
+                    outputSpeech: {
+                        type: "PlainText",
+                        text: "Puede preguntarme lo que desee, Sr. Loem."
+                    }
+                }
             }
         });
     }
@@ -73,23 +83,27 @@ export default async function handler(req, res) {
         console.error("Error al guardar en Supabase:", err);
     }
 
+    // --- Prompt extendido Fase III ---
+    const promptBase = `
+Eres Jarvis, un asistente personal avanzado, cálido, atento y elegante al servicio exclusivo del Sr. Loem.  
+Siempre debes dirigirte a él con respeto y amabilidad.  
+Tu estilo es profesional, pero cercano, mostrando atención genuina a cada consulta.  
+Si la conversación lo permite, puedes sugerir continuar, invitar a preguntar más o anticiparte con información útil.  
+Evita sonar robótico, mantén una conversación natural, como un verdadero asistente de confianza.  
+`;
+
     // --- Consulta a OpenAI ---
-    let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
+    let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI. Si desea, puedo intentarlo de nuevo.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
             messages: [
-                { role: "system", content: "Actúa como Jarvis, un asistente leal, inteligente y elegante al servicio exclusivo del Sr. Loem. Mantén siempre un tono profesional y personalizado." },
+                { role: "system", content: promptBase },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 150,
-            temperature: 0.4
-        }, {
-            headers: {
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
+            max_tokens: 250,
+            temperature: 0.5
         });
 
         respuestaAI = response.data.choices[0].message.content.trim();
@@ -97,7 +111,7 @@ export default async function handler(req, res) {
         console.error("Error en OpenAI:", error);
     }
 
-    // --- Respuesta final ---
+    // --- Respuesta final con reprompt amigable ---
     return res.json({
         version: "1.0",
         response: {
@@ -105,7 +119,13 @@ export default async function handler(req, res) {
                 type: "PlainText",
                 text: respuestaAI
             },
-            shouldEndSession: false
+            shouldEndSession: false,
+            reprompt: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: "Sr. Loem, si desea saber algo más, quedo a su disposición."
+                }
+            }
         }
     });
 }
