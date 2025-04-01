@@ -13,26 +13,31 @@ export default async function handler(req, res) {
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Disculpe Sr. Loem, sólo acepto peticiones POST. Estaré esperando su instrucción."
+                    text: "Disculpe Sr. Loem, sólo acepto peticiones POST."
                 },
                 shouldEndSession: false
             }
         });
     }
 
+    const session = req.body.session || {};
+    const sessionAttributes = session.attributes || {};
+
+    // --- Bienvenida ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
+            sessionAttributes,
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Jarvis operativo, Sr. Loem. Qué gusto volver a servirle. ¿En qué puedo asistirle hoy?"
+                    text: "Estoy atento a sus amables consultas, Sr. Loem."
                 },
                 shouldEndSession: false,
                 reprompt: {
                     outputSpeech: {
                         type: "PlainText",
-                        text: "Sr. Loem, cuando guste puede indicarme una consulta."
+                        text: "Cuando guste, Sr. Loem, puede indicarme su consulta."
                     }
                 }
             }
@@ -42,6 +47,7 @@ export default async function handler(req, res) {
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
+    // --- Captura ---
     if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
         let slotTexto = req.body.request.intent.slots?.texto?.value || '';
 
@@ -49,49 +55,74 @@ export default async function handler(req, res) {
             slotTexto = 'Jarvis';
         }
 
-        pregunta = `Jarvis ${slotTexto}`;
+        pregunta = slotTexto.trim();
     } else {
         pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
     }
 
+    // --- Continuación Inteligente ---
+    if (pregunta.toLowerCase().includes("continúa") || pregunta.toLowerCase().includes("sigue")) {
+        pregunta = sessionAttributes.ultimaPregunta
+            ? `Continúa con respecto a: ${sessionAttributes.ultimaPregunta}`
+            : 'Jarvis, por favor continúa.';
+    }
+
+    // --- Registro de pregunta para contexto ---
+    sessionAttributes.ultimaPregunta = pregunta;
+
+    // --- Pregunta especial de hora ---
     if (pregunta.toLowerCase().includes("hora")) {
         return res.json({
             version: "1.0",
+            sessionAttributes,
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}. ¿Desea saber algo más?`
+                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}. Quedo atento a cualquier otra consulta.`
                 },
                 shouldEndSession: false,
                 reprompt: {
                     outputSpeech: {
                         type: "PlainText",
-                        text: "Cuando guste, Sr. Loem, puede hacerme otra consulta."
+                        text: "Cuando guste, Sr. Loem, puede preguntarme lo que desee."
                     }
                 }
             }
         });
     }
 
-    // Registro en Supabase
+    // --- Registro en Supabase ---
     try {
         await supabase.from('memoria').insert([{ pregunta }]);
     } catch (err) {
         console.error("Error al guardar en Supabase:", err);
     }
 
-    // Consulta a OpenAI
-    let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI, pero si gusta puedo intentarlo nuevamente.";
+    // --- Prompt Fase VI ---
+    const promptBase = `
+Eres Jarvis, el asistente personal exclusivo y leal del Sr. Loem.
+Mantienes registro interno de la conversación actual mientras dure la sesión.
+Cuando el Sr. Loem pide continuar, sabes a qué tema se refiere y le respondes con naturalidad.
+Tu estilo es elegante, cálido y cordial, jamás cortante.
+Siempre invitas a que continúe conversando, usando frases suaves como:
+- 'Quedo atento a cualquier inquietud, Sr. Loem.'
+- 'Cuando lo desee, Sr. Loem, continuaré encantado.'
+- 'Sr. Loem, si desea que siga, solo indíquelo.'
+Recuerda que representas la máxima excelencia de un asistente al estilo de Jarvis de Tony Stark.
+`
+
+    // --- Llamada a OpenAI ---
+    let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
             messages: [
-                { role: "system", content: "Actúa como Jarvis, un asistente cálido, atento y elegante. Eres leal y profesional. Responde siempre de forma clara y amable al Sr. Loem." },
+                { role: "system", content: promptBase },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 180,
-            temperature: 0.5
+            max_tokens: 250,
+            temperature: 0.4
         });
 
         respuestaAI = response.data.choices[0].message.content.trim();
@@ -99,9 +130,10 @@ export default async function handler(req, res) {
         console.error("Error en OpenAI:", error);
     }
 
-    // Respuesta final con reprompt
+    // --- Respuesta final con contexto y reprompt ---
     return res.json({
         version: "1.0",
+        sessionAttributes,
         response: {
             outputSpeech: {
                 type: "PlainText",
@@ -111,7 +143,7 @@ export default async function handler(req, res) {
             reprompt: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Sr. Loem, ¿hay algo más en lo que pueda asistirle?"
+                    text: "Sr. Loem, quedo atento a cualquier otra consulta que desee realizar."
                 }
             }
         }
