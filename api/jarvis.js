@@ -20,52 +20,51 @@ export default async function handler(req, res) {
         });
     }
 
-    // Manejo de LaunchRequest (cuando dice: Alexa abre Jarvis)
+    // --- Elegancia desde el primer saludo ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "A sus órdenes, Sr. Loem. Puede hacerme cualquier pregunta."
+                    text: "Jarvis operativo. A sus órdenes, Sr. Loem. Puede preguntarme lo que desee."
                 },
                 shouldEndSession: false
             }
         });
     }
 
-    const API_KEY = process.env.OPENAI_API_KEY;
+    // --- Captura de intents ---
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
-    // Manejo del intent personalizado
-    if (intentName === 'PreguntarIntent') {
-        pregunta = req.body.request.intent.slots?.texto?.value || '';
+    if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
+        pregunta = req.body.request.intent.slots?.texto?.value || 'Sin pregunta definida';
     } else {
-        pregunta = 'No se reconoció el intent.';
+        pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
     }
 
-    // Guardar la pregunta en Supabase
+    // --- Registro en memoria ---
     try {
         await supabase.from('memoria').insert([{ pregunta }]);
     } catch (err) {
         console.error("Error al guardar en Supabase:", err);
     }
 
-    // Solicitud a OpenAI
+    // --- Comunicación con OpenAI ---
     let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
             messages: [
-                { role: "system", content: "Eres Jarvis, un asistente personal leal y profesional al servicio del Sr. Loem." },
+                { role: "system", content: "Eres Jarvis, un asistente personal leal, elegante y profesional al servicio exclusivo del Sr. Loem." },
                 { role: "user", content: pregunta }
             ],
             max_tokens: 200
         }, {
             headers: {
-                'Authorization': `Bearer ${API_KEY}`,
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                 'Content-Type': 'application/json'
             }
         });
@@ -75,7 +74,7 @@ export default async function handler(req, res) {
         console.error("Error en OpenAI:", error);
     }
 
-    // Devolver respuesta en formato Alexa correcto
+    // --- Respuesta final ---
     res.json({
         version: "1.0",
         response: {
