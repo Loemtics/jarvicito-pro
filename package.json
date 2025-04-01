@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "description": "Jarvicito Pro para el Sr. Loem",
   "type": "module",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.4",
     "axios": "^1.6.0",
