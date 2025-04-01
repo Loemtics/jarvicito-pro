@@ -6,6 +6,8 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;  // Asegúrate de que esta clave esté configurada correctamente
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({
