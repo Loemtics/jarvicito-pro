@@ -1,5 +1,9 @@
+import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
-import fs from 'fs';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -7,31 +11,24 @@ export default async function handler(req, res) {
     }
 
     const API_KEY = process.env.OPENAI_API_KEY;
-
-    const cargarMemoria = () => {
-        return JSON.parse(fs.readFileSync('memory.json'));
-    };
-
-    const guardarMemoria = (memoria) => {
-        fs.writeFileSync('memory.json', JSON.stringify(memoria, null, 2));
-    };
-
     const intentName = req.body.request.intent.name;
-    const memoria = cargarMemoria();
-
     let pregunta = '';
 
     if (intentName === 'PreguntarIntent') {
         pregunta = req.body.request.intent.slots.texto.value || '';
     } else if (intentName === 'JarvisIntent') {
-        pregunta = 'Activación directa';
+        pregunta = 'Activación';
     } else {
-        pregunta = 'Intent desconocido';
+        pregunta = 'No se reconoció el intent.';
     }
 
+    // Guardar pregunta en Supabase
+    await supabase.from('memoria').insert([
+        { pregunta }
+    ]);
+
     const mensajes = [
-        { role: "system", content: "Eres Jarvis, el asistente personal del Sr. Loem." },
-        { role: "user", content: "Memoria actual: " + JSON.stringify(memoria) },
+        { role: "system", content: "Eres Jarvis, un asistente personal leal y profesional al servicio del Sr. Loem." },
         { role: "user", content: pregunta }
     ];
 
@@ -47,10 +44,8 @@ export default async function handler(req, res) {
             }
         });
 
-        memoria.memorias.push({ fecha: new Date().toISOString(), evento: pregunta });
-        guardarMemoria(memoria);
-
-        res.json({ respuesta: response.data.choices[0].message.content.trim() });
+        const respuesta = response.data.choices[0].message.content.trim();
+        res.json({ respuesta });
 
     } catch (error) {
         console.error(error);
