@@ -2,9 +2,9 @@
   "name": "jarvis",
   "version": "1.0.0",
   "description": "Asistente Jarvis",
-  "main": "api/jarvis.js",  // Cambiado a la ubicación correcta de tu archivo principal
+  "main": "api/jarvis.js",
   "scripts": {
-    "start": "node api/jarvis.js",  // Asegúrate de que sea correcto según la ubicación
+    "start": "node api/jarvis.js",
     "dev": "node api/jarvis.js"
   },
   "dependencies": {
@@ -14,7 +14,7 @@
     "body-parser": "^1.19.0"
   },
   "engines": {
-    "node": "16.x"  // Asegúrate de que la versión de Node.js sea compatible
+    "node": "16.x"
   },
   "author": "Sr. Loem",
   "license": "MIT"
