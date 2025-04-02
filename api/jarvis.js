@@ -1,11 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-import axios from 'axios';
-
-// --- Configuración de Supabase ---
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({
@@ -23,20 +15,7 @@ export default async function handler(req, res) {
     const session = req.body.session || {};
     const sessionAttributes = session.attributes || {};
 
-    // --- Recuperar historial reciente ---
-    let historial = [];
-    try {
-        const { data } = await supabase
-            .from('historial')
-            .select('pregunta, respuesta, fecha')
-            .order('fecha', { ascending: false })
-            .limit(3);
-        if (data) historial = data;
-    } catch (err) {
-        console.error("Error al obtener historial:", err);
-    }
-
-    // --- Bienvenida ---
+    // --- Manejo del LaunchRequest ---
     if (req.body.request?.type === 'LaunchRequest') {
         return res.json({
             version: "1.0",
@@ -60,7 +39,7 @@ export default async function handler(req, res) {
     const intentName = req.body.request?.intent?.name || '';
     let pregunta = '';
 
-    // --- Captura ---
+    // --- Captura de pregunta del usuario ---
     if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
         let slotTexto = req.body.request.intent.slots?.texto?.value || '';
 
