@@ -6,7 +6,8 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;  // Asegúrate de que esta clave esté configurada correctamente
+// --- Configuración de OpenAI ---
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -15,7 +16,7 @@ export default async function handler(req, res) {
             response: {
                 outputSpeech: {
                     type: "PlainText",
-                    text: "Disculpe Sr. Loem, sólo acepto peticiones POST."
+                    text: "Disculpe, Sr. Loem, sólo acepto peticiones POST."
                 },
                 shouldEndSession: false
             }
@@ -131,7 +132,7 @@ Actúa siempre como un verdadero mayordomo digital al estilo Jarvis de Tony Star
                 { role: "system", content: promptBase },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 1500,  // Ajustado el valor de max_tokens a 1500
+            max_tokens: 150,  // Ajustado el valor para evitar errores
             temperature: 0.4
         });
 
