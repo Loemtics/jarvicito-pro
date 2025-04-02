@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 
-// --- Configuración ---
+// --- Configuración de Supabase ---
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -121,7 +121,6 @@ Actúa siempre como un verdadero mayordomo digital al estilo Jarvis de Tony Star
 
     // --- Consulta a OpenAI ---
     let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
-    console.log("Enviando solicitud a OpenAI...");
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
@@ -130,16 +129,13 @@ Actúa siempre como un verdadero mayordomo digital al estilo Jarvis de Tony Star
                 { role: "system", content: promptBase },
                 { role: "user", content: pregunta }
             ],
-            max_tokens: 150,  // Ajusté el max_tokens para evitar un posible error
+            max_tokens: 300,
             temperature: 0.4
         });
 
-        console.log("Respuesta de OpenAI:", response.data);
-
         respuestaAI = response.data.choices[0].message.content.trim();
     } catch (error) {
-        console.error("Error al contactar con OpenAI:", error);
-        respuestaAI = "Disculpe, Sr. Loem, hubo un problema al contactar con OpenAI.";
+        console.error("Error en OpenAI:", error);
     }
 
     // --- Registro persistente en historial ---
