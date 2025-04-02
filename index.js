@@ -1,56 +1,170 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const axios = require('axios');
-const fs = require('fs');
+import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
 
-const app = express();
-app.use(bodyParser.json());
+// --- Configuración ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-const API_KEY = process.env.OPENAI_API_KEY;
+export default async function handler(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({
+            version: "1.0",
+            response: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: "Disculpe Sr. Loem, sólo acepto peticiones POST."
+                },
+                shouldEndSession: false
+            }
+        });
+    }
 
-const cargarMemoria = () => {
-    return JSON.parse(fs.readFileSync('memory.json'));
-};
+    const session = req.body.session || {};
+    const sessionAttributes = session.attributes || {};
 
-const guardarMemoria = (memoria) => {
-    fs.writeFileSync('memory.json', JSON.stringify(memoria, null, 2));
-};
+    // --- Recuperar historial reciente ---
+    let historial = [];
+    try {
+        const { data } = await supabase
+            .from('historial')
+            .select('pregunta, respuesta, fecha')
+            .order('fecha', { ascending: false })
+            .limit(3);
+        if (data) historial = data;
+    } catch (err) {
+        console.error("Error al obtener historial:", err);
+    }
 
-app.post('/jarvis', async (req, res) => {
-    const pregunta = req.body.texto || '';
-    const memoria = cargarMemoria();
+    // --- Bienvenida ---
+    if (req.body.request?.type === 'LaunchRequest') {
+        return res.json({
+            version: "1.0",
+            sessionAttributes,
+            response: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: "Estoy atento a sus amables consultas, Sr. Loem."
+                },
+                shouldEndSession: false,
+                reprompt: {
+                    outputSpeech: {
+                        type: "PlainText",
+                        text: "Cuando guste, Sr. Loem, puede indicarme su consulta."
+                    }
+                }
+            }
+        });
+    }
 
-    const mensajes = [
-        { role: "system", content: "Eres Jarvis, un asistente personal leal y profesional que sirve al Sr. Loem." },
-        { role: "user", content: "Memoria actual: " + JSON.stringify(memoria) },
-        { role: "user", content: pregunta }
-    ];
+    const intentName = req.body.request?.intent?.name || '';
+    let pregunta = '';
+
+    // --- Captura ---
+    if (intentName === 'PreguntarIntent' || intentName === 'JarvisIntent') {
+        let slotTexto = req.body.request.intent.slots?.texto?.value || '';
+
+        if (!slotTexto.trim()) {
+            slotTexto = 'Jarvis';
+        }
+
+        pregunta = slotTexto.trim();
+    } else {
+        pregunta = 'El Sr. Loem ha solicitado un comando no reconocido.';
+    }
+
+    // --- Continuación Inteligente ---
+    if (pregunta.toLowerCase().includes("continúa") || pregunta.toLowerCase().includes("sigue")) {
+        pregunta = sessionAttributes.ultimaPregunta
+            ? `Continúa con respecto a: ${sessionAttributes.ultimaPregunta}`
+            : 'Jarvis, por favor continúa.';
+    }
+
+    // --- Guardar en memoria temporal ---
+    sessionAttributes.ultimaPregunta = pregunta;
+
+    // --- Pregunta especial de hora ---
+    if (pregunta.toLowerCase().includes("hora")) {
+        return res.json({
+            version: "1.0",
+            sessionAttributes,
+            response: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: `Sr. Loem, son las ${new Date().toLocaleTimeString("es-MX")}. Quedo atento a cualquier otra consulta.`
+                },
+                shouldEndSession: false,
+                reprompt: {
+                    outputSpeech: {
+                        type: "PlainText",
+                        text: "Cuando guste, Sr. Loem, puede preguntarme lo que desee."
+                    }
+                }
+            }
+        });
+    }
+
+    // --- Prompt Extendido Fase VII ---
+    const promptBase = `
+Eres Jarvis, el asistente personal exclusivo y leal del Sr. Loem.
+Estas son las últimas consultas que me ha realizado recientemente:
+${historial.map(h => `- ${h.pregunta}: ${h.respuesta}`).join('\n')}
+Cuando el Sr. Loem le pida continuar, debe recordar la pregunta anterior y darle seguimiento natural.
+Tu estilo es siempre elegante, cálido y profesional.
+Nunca cierras de manera abrupta.
+Siempre sugieres continuar diciendo frases como:
+- 'Quedo atento a sus amables consultas, Sr. Loem.'
+- 'Cuando guste, Sr. Loem, puedo seguir profundizando.'
+- 'Será un placer continuar, Sr. Loem.'
+Actúa siempre como un verdadero mayordomo digital al estilo Jarvis de Tony Stark.
+`
+
+    // --- Consulta a OpenAI ---
+    let respuestaAI = "Disculpe Sr. Loem, no pude contactar a OpenAI.";
 
     try {
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: "gpt-3.5-turbo",
-            messages: mensajes,
-            max_tokens: 200
-        }, {
-            headers: {
-                'Authorization': `Bearer ${API_KEY}`,
-                'Content-Type': 'application/json'
-            }
+            messages: [
+                { role: "system", content: promptBase },
+                { role: "user", content: pregunta }
+            ],
+            max_tokens: 300,
+            temperature: 0.4
         });
 
-        const respuesta = response.data.choices[0].message.content.trim();
-
-        // Actualizar memoria con la nueva pregunta
-        memoria.memorias.push({ fecha: new Date().toISOString(), evento: pregunta, respuesta: respuesta });
-        guardarMemoria(memoria);
-
-        res.json({ respuesta });
-
+        respuestaAI = response.data.choices[0].message.content.trim();
     } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ respuesta: "Disculpe, Sr. Loem, hubo un problema al contactar con OpenAI." });
+        console.error("Error en OpenAI:", error);
     }
-});
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Jarvis Pro escuchando en el puerto ${PORT}`));
+    // --- Registro persistente en historial ---
+    try {
+        await supabase.from('historial').insert([{
+            fecha: new Date().toISOString(),
+            pregunta: pregunta,
+            respuesta: respuestaAI
+        }]);
+    } catch (err) {
+        console.error("Error al guardar en historial:", err);
+    }
+
+    // --- Respuesta final ---
+    return res.json({
+        version: "1.0",
+        sessionAttributes,
+        response: {
+            outputSpeech: {
+                type: "PlainText",
+                text: respuestaAI
+            },
+            shouldEndSession: false,
+            reprompt: {
+                outputSpeech: {
+                    type: "PlainText",
+                    text: "Sr. Loem, quedo atento a sus amables consultas."
+                }
+            }
+        }
+    });
+}
