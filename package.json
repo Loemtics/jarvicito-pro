@@ -14,7 +14,7 @@
     "body-parser": "^1.19.0"
   },
   "engines": {
-    "node": "16.x"
+    "node": "18.x"
   },
   "author": "Sr. Loem",
   "license": "MIT"
